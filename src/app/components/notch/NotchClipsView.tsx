@@ -19,7 +19,7 @@ export const NotchClipsView: React.FC<NotchClipsViewProps> = ({
 }) => {
   return (
     <div className="flex-1 flex flex-col justify-between mt-2 overflow-hidden">
-      <div className="flex-1 overflow-y-auto max-h-[145px] pr-0.5 space-y-0.5">
+      <div className="flex-1 overflow-y-auto max-h-[145px] pr-0.5 space-y-0.5 no-scrollbar">
         {clipItems.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-6 text-zinc-500">
             <span className="text-[11px] font-medium text-zinc-400">No clips yet</span>

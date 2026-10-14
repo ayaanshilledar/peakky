@@ -2,6 +2,7 @@
 
 import React, { useState, useRef } from "react";
 import { TaskItem } from "../../hooks/usePeakyStore";
+import { useReminderStore } from "../../hooks/useReminderStore";
 
 interface NotchTasksViewProps {
   tasks: TaskItem[];
@@ -20,14 +21,25 @@ export const NotchTasksView: React.FC<NotchTasksViewProps> = ({
 }) => {
   const [inputVal, setInputVal] = useState("");
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [feedback, setFeedback] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
+
+  const { addReminder } = useReminderStore();
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (inputVal.trim()) {
-      addTask(inputVal.trim());
-      setInputVal("");
+    const text = inputVal.trim();
+    if (!text) return;
+
+    const parsed = addReminder(text);
+    if (parsed.isReminder) {
+      setFeedback(`🔔 Reminder set for ${parsed.formattedTime}`);
+      setTimeout(() => setFeedback(null), 3500);
+      addTask(`${parsed.title} (🔔 ${parsed.formattedTime})`);
+    } else {
+      addTask(text);
     }
+    setInputVal("");
   };
 
   const handleCopyText = (id: string, text: string) => {
@@ -49,21 +61,28 @@ export const NotchTasksView: React.FC<NotchTasksViewProps> = ({
             onChange={(e) => setInputVal(e.target.value)}
             onFocus={() => onInputFocusChange?.(true)}
             onBlur={() => onInputFocusChange?.(false)}
-            placeholder="Add task or note..."
+            placeholder="Add task or 'meeting in 40 mins'..."
             className="flex-1 bg-transparent text-xs text-white placeholder-zinc-500 focus:outline-none font-sans"
           />
           <kbd className="text-[10px] font-mono text-zinc-500 bg-zinc-800/80 px-1 py-0.2 rounded select-none">
             ↵
           </kbd>
         </div>
+        {feedback && (
+          <div className="mt-1 px-1 text-[10px] text-emerald-400 font-mono animate-in fade-in duration-200">
+            {feedback}
+          </div>
+        )}
       </form>
 
       {/* Refined Task Items List */}
-      <div className="flex-1 overflow-y-auto max-h-[110px] pr-0.5 space-y-1">
+      <div className="flex-1 overflow-y-auto max-h-[145px] pr-0.5 space-y-1 no-scrollbar">
         {tasks.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-3 text-zinc-500">
+          <div className="flex flex-col items-center justify-center py-4 text-zinc-500">
             <span className="text-[11px] font-medium text-zinc-400">All clear</span>
-            <span className="text-[10px] text-zinc-600 mt-0.5 font-mono">Type above & press ↵</span>
+            <span className="text-[10px] text-zinc-600 mt-1 font-mono">
+              Try typing &quot;meeting in 40 mins&quot; ↵
+            </span>
           </div>
         ) : (
           tasks.slice(0, 5).map((task) => (

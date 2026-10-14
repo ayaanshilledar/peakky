@@ -70,7 +70,7 @@ export const NotchCalendarView: React.FC<NotchCalendarViewProps> = ({
                 setSelectedDate(t);
               }}
               title="Jump to Today"
-              className="text-[10px] font-mono text-zinc-400 hover:text-white px-1.5 py-0.5 hover:bg-zinc-800 rounded transition-colors cursor-pointer"
+              className="text-[10px] font-mono text-zinc-400 hover:text-blue-400 px-1.5 py-0.5 hover:bg-blue-500/10 rounded transition-colors cursor-pointer"
             >
               •
             </button>
@@ -131,9 +131,9 @@ export const NotchCalendarView: React.FC<NotchCalendarViewProps> = ({
                 onClick={() => setSelectedDate(item.dateObj)}
                 className={`w-6 h-5.5 mx-auto rounded flex flex-col items-center justify-center relative text-[10px] font-mono transition-colors cursor-pointer ${
                   isSelected
-                    ? "bg-white text-black font-semibold shadow-sm"
+                    ? "bg-blue-500 text-white font-semibold shadow-sm shadow-blue-500/30"
                     : isToday
-                    ? "text-emerald-400 font-bold bg-zinc-800/90"
+                    ? "text-blue-400 font-bold bg-blue-500/10 border border-blue-500/20"
                     : item.monthOffset !== 0
                     ? "text-zinc-700 hover:text-zinc-500"
                     : "text-zinc-400 hover:text-white hover:bg-white/[0.06]"
@@ -143,7 +143,7 @@ export const NotchCalendarView: React.FC<NotchCalendarViewProps> = ({
                 {hasEvent && (
                   <span
                     className={`w-1 h-1 rounded-full absolute bottom-0.5 ${
-                      isSelected ? "bg-black" : "bg-emerald-400"
+                      isSelected ? "bg-white" : "bg-blue-400"
                     }`}
                   />
                 )}
@@ -172,7 +172,7 @@ export const NotchCalendarView: React.FC<NotchCalendarViewProps> = ({
         </div>
 
         {/* Events Mini List for Selected Date */}
-        <div className="flex-1 overflow-y-auto max-h-[135px] pr-0.5 space-y-2 mt-2">
+        <div className="flex-1 overflow-y-auto max-h-[135px] pr-0.5 space-y-2 mt-2 no-scrollbar">
           {selectedDayEvents.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-6 text-zinc-500 text-center">
               <span className="text-[11px] font-mono text-zinc-400">

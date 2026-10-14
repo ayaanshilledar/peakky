@@ -52,9 +52,16 @@
 - **1-Click Copy**: Re-copy items with instant `✓ copied` visual confirmation.
 - **Crisp Previews**: Thumbnails with resolution tags (`1920×1080`) and relative timestamps (`now`, `2m`, `1h`).
 
+### CLI AI Agents HUD (Claude Code, OpenCode, Codex, Terminal)
+- **Ambient Ambient Pill Monitoring**: Live breathing state indicator (Thinking, Executing Tool, Awaiting Approval, Done) with active step marquee on the collapsed notch.
+- **Expanded Command Deck**: Real-time tool stream (bash, file edits, grep, searches), step counter, live token count, and cost estimate.
+- **1-Click Action & Tool Approvals**: Approve or deny terminal commands and file edits directly from the Dynamic Island without switching windows.
+- **Local Event Bridge (`127.0.0.1:3949`)**: Lightweight TCP/HTTP telemetry receiver in Tauri Rust with ready-to-use hooks for Claude Code, OpenCode, and shell profiles.
+- **Built-in Interactive Simulator**: Test live state transitions, approvals, and animations out of the box.
+
 ### Settings Dashboard
 - Dedicated matte obsidian settings window with `BroadcastChannel` live synchronization.
-- Preferences for Calendar URLs, focus duration presets, clipboard history, and auto-start.
+- Preferences for Calendar URLs, focus duration presets, clipboard history, CLI AI Agent hooks, and auto-start.
 
 ---
 
@@ -65,11 +72,12 @@ Peaky
 ├── Frontend (Next.js 16 + React 19 + TypeScript + Tailwind CSS)
 │   ├── MacNotch: Floating Dynamic Island overlay
 │   ├── Settings Dashboard: Multi-window preferences and data management
-│   └── Hooks: useFocusTimer, usePeakyStore, useCalendar, useClipboardStore
+│   └── Hooks: useFocusTimer, usePeakyStore, useCalendar, useClipboardStore, useAgentStore
 │
 └── Backend (Tauri v2 + Rust)
     ├── Window Geometry: Top-bezel clamp & monitor boundary clamping
     ├── Clipboard Watcher: Background thread monitoring text & RGBA screenshot buffers
+    ├── Local Agent Bridge: Non-blocking HTTP receiver on 127.0.0.1:3949
     └── Native Bridge: External browser launch & calendar curl fetcher
 ```
 

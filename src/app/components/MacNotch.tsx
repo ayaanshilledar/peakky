@@ -5,6 +5,14 @@ import { useFocusTimer } from "../hooks/useFocusTimer";
 import { usePeakyStore } from "../hooks/usePeakyStore";
 import { useCalendar } from "../hooks/useCalendar";
 import { useClipboardStore } from "../hooks/useClipboardStore";
+import { useMedia } from "../hooks/useMedia";
+import { useChatMemoryStore } from "../hooks/useChatMemoryStore";
+import { PeakyAppContext } from "../types/chat";
+import { useFeatureFlags } from "../hooks/useFeatureFlags";
+import { FeatureFlagKey } from "../utils/featureFlags";
+import { useReminderStore } from "../hooks/useReminderStore";
+import { useSystemOSD } from "../hooks/useSystemOSD";
+import { useVoiceDictation } from "../hooks/useVoiceDictation";
 import {
   NotchHeader,
   NotchCollapsed,
@@ -12,18 +20,37 @@ import {
   NotchTasksView,
   NotchCalendarView,
   NotchClipsView,
+  NotchMediaView,
+  NotchChatView,
+  NotchSystemView,
+  NotchHomeView,
+  NotchAlarmAlert,
   NotchTab,
+  getNotchCapsuleClasses,
 } from "./notch";
 
 export default function MacNotch() {
+  const { isFeatureEnabled } = useFeatureFlags();
   const [isHovered, setIsHovered] = useState(false);
   const [isInputFocused, setIsInputFocused] = useState(false);
+  const [timerSubTab, setTimerSubTab] = useState<"focus" | "reminders">("focus");
   const [isEditingTimer, setIsEditingTimer] = useState(false);
-  const [activeTab, setActiveTab] = useState<NotchTab>("tasks");
+  const [activeTab, setActiveTab] = useState<NotchTab>("home");
   const [clockTime, setClockTime] = useState("");
 
   const isDraggingRef = useRef(false);
   const closeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Fallback active tab if current tab is disabled by feature flag
+  useEffect(() => {
+    if (!isFeatureEnabled(activeTab as FeatureFlagKey)) {
+      const availableTabs: NotchTab[] = ["home", "tasks", "timer", "calendar", "clips", "media", "chat"];
+      const firstEnabled = availableTabs.find((t) => isFeatureEnabled(t as FeatureFlagKey));
+      if (firstEnabled) {
+        setActiveTab(firstEnabled);
+      }
+    }
+  }, [activeTab, isFeatureEnabled]);
 
   const {
     settings,
@@ -35,8 +62,27 @@ export default function MacNotch() {
     updateSettings,
   } = useFocusTimer();
 
-  const { tasks, addTask, toggleTask, deleteTask } = usePeakyStore();
-  const { events, currentOrNextEvent, openMeeting } = useCalendar();
+  const {
+    imminentReminder,
+    activeAlarm,
+    snoozeReminder,
+    dismissReminder,
+  } = useReminderStore();
+
+  const { activeHUD } = useSystemOSD();
+
+  const {
+    tasks,
+    notes,
+    profileName,
+    addTask,
+    toggleTask,
+    deleteTask,
+    clearCompletedTasks,
+    addNote,
+    deleteNote,
+  } = usePeakyStore();
+  const { events, todayEvents, currentOrNextEvent, openMeeting } = useCalendar();
 
   const {
     items: clipItems,
@@ -44,6 +90,104 @@ export default function MacNotch() {
     copyItem: copyClipItem,
     deleteItem: deleteClipItem,
   } = useClipboardStore();
+
+  const {
+    media,
+    togglePlayPause,
+    skipNext,
+    skipPrevious,
+    seek,
+  } = useMedia();
+
+  const {
+    messages: chatMessages,
+    longTermMemories,
+    aiSettings,
+    isGenerating: isChatGenerating,
+    sendMessage: sendChatMessage,
+    addMemory: addChatMemory,
+    deleteMemory: deleteChatMemory,
+    clearMessages: clearChatMessages,
+  } = useChatMemoryStore();
+
+  const activeTasks = tasks.filter((t) => !t.completed);
+  const completedTasks = tasks.filter((t) => t.completed);
+
+  const appContext: PeakyAppContext = {
+    timer: {
+      isRunning,
+      formattedTime,
+      progressPercent,
+    },
+    tasks: {
+      total: tasks.length,
+      activeCount: activeTasks.length,
+      activeTitles: activeTasks.map((t) => t.text),
+      completedCount: completedTasks.length,
+    },
+    calendar: {
+      hasEvents: events.length > 0,
+      currentOrNextEventTitle: currentOrNextEvent?.title,
+      currentOrNextEventTime: currentOrNextEvent?.start
+        ? new Date(currentOrNextEvent.start).toLocaleTimeString([], {
+            hour: "numeric",
+            minute: "2-digit",
+          })
+        : undefined,
+      eventCount: events.length,
+    },
+    clips: {
+      totalClips: clipItems.length,
+      recentClips: clipItems.slice(0, 3).map((item) => ({
+        text: item.content || item.type,
+        type: item.type,
+        time: typeof item.timestamp === "number" ? new Date(item.timestamp).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) : String(item.timestamp),
+      })),
+    },
+  };
+
+  const handleSendChatMessage = (content: string, context: PeakyAppContext) => {
+    sendChatMessage(content, context, {
+      onCreateTask: (title) => {
+        if (title) addTask(title);
+      },
+      onCompleteTask: (titleQuery) => {
+        const query = (titleQuery || "").toLowerCase();
+        const target = tasks.find(
+          (t) => !t.completed && t.text.toLowerCase().includes(query)
+        );
+        if (target) {
+          toggleTask(target.id);
+        }
+      },
+      onDeleteTask: (titleQuery) => {
+        const query = (titleQuery || "").toLowerCase();
+        const target = tasks.find((t) =>
+          t.text.toLowerCase().includes(query)
+        );
+        if (target) {
+          deleteTask(target.id);
+        }
+      },
+      onClearCompletedTasks: () => {
+        clearCompletedTasks();
+      },
+      onStartTimer: (durationMinutes) => {
+        updateSettings({ focusMinutes: durationMinutes });
+        resetTimer();
+        if (!isRunning) toggleTimer();
+      },
+      onPauseTimer: () => {
+        if (isRunning) toggleTimer();
+      },
+      onResetTimer: () => {
+        resetTimer();
+      },
+      onSaveMemory: (fact) => {
+        if (fact) addChatMemory(fact);
+      },
+    });
+  };
 
   // Clock interval
   useEffect(() => {
@@ -62,18 +206,58 @@ export default function MacNotch() {
     return () => clearInterval(interval);
   }, []);
 
-  // Global Escape key listener to close/blur
+  const [dictationSuccess, setDictationSuccess] = useState(false);
+  const successTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  const {
+    isRecording: isDictating,
+    isTranscribing,
+    audioLevel,
+    lastTranscribedText,
+    startRecording,
+    stopRecording,
+  } = useVoiceDictation(async (text) => {
+    // Copy into clipboard
+    try {
+      const { invoke } = await import("@tauri-apps/api/core");
+      await invoke("copy_to_clipboard", {
+        content: text,
+        itemType: "text",
+      });
+    } catch {
+      await navigator.clipboard.writeText(text);
+    }
+
+    setDictationSuccess(true);
+    if (successTimeoutRef.current) clearTimeout(successTimeoutRef.current);
+    successTimeoutRef.current = setTimeout(() => {
+      setDictationSuccess(false);
+    }, 3000);
+  });
+
+  // Global Escape & Ctrl+N hotkey listener
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         setIsInputFocused(false);
         setIsEditingTimer(false);
         setIsHovered(false);
+        return;
+      }
+
+      // Ctrl + N or Cmd + N Voice Dictation Trigger
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "n") {
+        e.preventDefault();
+        if (isDictating) {
+          stopRecording();
+        } else {
+          startRecording();
+        }
       }
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, []);
+  }, [isDictating, startRecording, stopRecording]);
 
   // Restore saved horizontal notch position on launch
   useEffect(() => {
@@ -117,7 +301,7 @@ export default function MacNotch() {
     if (e.button !== 0) return; // Only left mouse button
     e.preventDefault();
     isDraggingRef.current = true;
-
+  
     try {
       const { invoke } = await import("@tauri-apps/api/core");
       const initialWinX = await invoke<number>("get_notch_x");
@@ -178,6 +362,23 @@ export default function MacNotch() {
     !isEventLive &&
     currentOrNextEvent.start - now > 0 &&
     currentOrNextEvent.start - now <= 20 * 60 * 1000;
+  const isMediaActive = Boolean(media?.title);
+
+  const capsuleClasses = getNotchCapsuleClasses({
+    activeAlarm: Boolean(activeAlarm),
+    isExpanded,
+    activeTab,
+    timerSubTab,
+    tasksCount: tasks.length,
+    clipsCount: clipItems.length,
+    isMediaActive,
+    activeHUD: Boolean(activeHUD),
+    imminentReminder: Boolean(imminentReminder),
+    isRunning,
+    isEventLiveOrSoon: Boolean(isEventLive || isEventSoon),
+    isDictating,
+    dictationSuccess,
+  });
 
   return (
     <div className="fixed top-0 left-1/2 -translate-x-1/2 z-50 flex flex-col items-center select-none m-0 p-0 font-sans antialiased">
@@ -185,35 +386,29 @@ export default function MacNotch() {
       <div
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
-        className={`relative bg-black text-white rounded-b-[22px] rounded-t-none border-b border-x border-white/[0.08] transition-all duration-200 ease-[cubic-bezier(0.16,1,0.3,1)] overflow-hidden flex flex-col justify-between ${
-          isExpanded
-            ? activeTab === "timer"
-              ? "w-[340px] h-[130px] pt-2 px-3 pb-3"
-              : activeTab === "tasks"
-              ? tasks.length === 0
-                ? "w-[340px] h-[150px] pt-2 px-3 pb-3"
-                : "w-[340px] h-[195px] pt-2 px-3 pb-3"
-              : activeTab === "calendar"
-              ? "w-[420px] h-[230px] pt-2 px-3.5 pb-3.5"
-              : activeTab === "clips"
-              ? clipItems.length === 0
-                ? "w-[340px] h-[150px] pt-2 px-3 pb-3"
-                : "w-[340px] h-[195px] pt-2 px-3 pb-3"
-              : "w-[340px] h-[130px] pt-2 px-3 pb-3"
-            : isRunning
-            ? "w-[195px] h-[34px] px-3.5 flex items-center justify-between"
-            : isEventLive || isEventSoon
-            ? "w-[225px] h-[34px] px-3.5 flex items-center justify-between"
-            : "w-[175px] h-[34px] px-3.5 flex items-center justify-between"
-        }`}
+        className={`relative bg-black text-white rounded-b-[22px] rounded-t-none border-b border-x border-white/[0.08] transition-all duration-200 ease-[cubic-bezier(0.16,1,0.3,1)] overflow-hidden flex flex-col justify-between ${capsuleClasses}`}
       >
-        {/* Compact / Collapsed Pill View */}
-        {!isExpanded ? (
+        {/* Alarm Alert View or Collapsed/Expanded Views */}
+        {activeAlarm ? (
+          <NotchAlarmAlert
+            alarm={activeAlarm}
+            onSnooze={snoozeReminder}
+            onDismiss={dismissReminder}
+          />
+        ) : !isExpanded ? (
           <NotchCollapsed
             isRunning={isRunning}
             formattedTime={formattedTime}
             clockTime={clockTime}
             currentOrNextEvent={currentOrNextEvent}
+            media={media}
+            imminentReminder={imminentReminder}
+            activeHUD={activeHUD}
+            isDictating={isDictating}
+            isTranscribing={isTranscribing}
+            audioLevel={audioLevel}
+            dictationSuccess={dictationSuccess}
+            lastDictatedText={lastTranscribedText}
             onStartDrag={handleStartDrag}
           />
         ) : (
@@ -226,6 +421,30 @@ export default function MacNotch() {
               onOpenSettings={handleOpenSettings}
             />
 
+            {activeTab === "home" && (
+              <NotchHomeView
+                tasks={tasks}
+                notes={notes}
+                addTask={addTask}
+                toggleTask={toggleTask}
+                deleteTask={deleteTask}
+                addNote={addNote}
+                deleteNote={deleteNote}
+                onSelectTab={setActiveTab}
+                currentOrNextEvent={currentOrNextEvent}
+                todayEvents={todayEvents}
+                events={events}
+                profileName={profileName}
+                openMeeting={openMeeting}
+                timerState={{
+                  isRunning,
+                  formattedTime,
+                  toggleTimer,
+                }}
+                onInputFocusChange={setIsInputFocused}
+              />
+            )}
+
             {activeTab === "timer" && (
               <NotchTimerView
                 settings={settings}
@@ -236,6 +455,7 @@ export default function MacNotch() {
                 resetTimer={resetTimer}
                 updateSettings={updateSettings}
                 onEditingChange={setIsEditingTimer}
+                onSubTabChange={setTimerSubTab}
               />
             )}
 
@@ -265,9 +485,39 @@ export default function MacNotch() {
                 deleteClipItem={deleteClipItem}
               />
             )}
+
+            {activeTab === "media" && (
+              <NotchMediaView
+                media={media}
+                togglePlayPause={togglePlayPause}
+                skipNext={skipNext}
+                skipPrevious={skipPrevious}
+                seek={seek}
+              />
+            )}
+
+            {activeTab === "system" && (
+              <NotchSystemView />
+            )}
+
+            {activeTab === "chat" && (
+              <NotchChatView
+                messages={chatMessages}
+                longTermMemories={longTermMemories}
+                aiSettings={aiSettings}
+                isGenerating={isChatGenerating}
+                onSendMessage={handleSendChatMessage}
+                onAddMemory={addChatMemory}
+                onDeleteMemory={deleteChatMemory}
+                onClearMessages={clearChatMessages}
+                onInputFocusChange={setIsInputFocused}
+                appContext={appContext}
+              />
+            )}
           </div>
         )}
       </div>
     </div>
   );
 }
+
