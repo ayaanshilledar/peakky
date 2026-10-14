@@ -512,7 +512,7 @@ export default function SettingsPage() {
                 <div>
                   <h2 className="text-sm font-semibold text-white tracking-tight">Clipboard History</h2>
                   <p className="text-xs text-zinc-400 mt-0.5">
-                    Log of captured texts, screenshots, and <span className="text-zinc-200 font-mono">Ctrl+N</span> voice dictations (retained for 24 hours).
+                    Log of captured texts, screenshots, and <span className="text-zinc-200 font-mono">Alt+D</span> voice dictations (retained for 24 hours).
                   </p>
                 </div>
                 {clipItems.length > 0 && (
@@ -775,6 +775,18 @@ export default function SettingsPage() {
                   Keyboard Shortcuts Cheatsheet
                 </h3>
                 <div className="flex flex-col gap-2 pt-1 text-xs">
+                  <div className="flex justify-between items-center py-1.5 border-b border-white/[0.04]">
+                    <span className="text-zinc-300">Voice Dictation (Start / Finish)</span>
+                    <kbd className="font-mono bg-zinc-900 border border-white/10 px-2 py-0.5 rounded text-[11px] text-zinc-200">
+                      Alt + D / Ctrl + Space
+                    </kbd>
+                  </div>
+                  <div className="flex justify-between items-center py-1.5 border-b border-white/[0.04]">
+                    <span className="text-zinc-300">Cancel / Terminate Dictation</span>
+                    <kbd className="font-mono bg-zinc-900 border border-white/10 px-2 py-0.5 rounded text-[11px] text-zinc-200">
+                      Esc
+                    </kbd>
+                  </div>
                   <div className="flex justify-between items-center py-1.5 border-b border-white/[0.04]">
                     <span className="text-zinc-300">Volume HUD Overlay</span>
                     <kbd className="font-mono bg-zinc-900 border border-white/10 px-2 py-0.5 rounded text-[11px] text-zinc-200">

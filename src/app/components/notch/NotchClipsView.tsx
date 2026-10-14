@@ -109,7 +109,7 @@ export const NotchClipsView: React.FC<NotchClipsViewProps> = ({
       <div className="flex items-center justify-between pt-1.5 px-2 mt-1 border-t border-white/[0.05] text-[10px] text-zinc-500 font-mono">
         <span>History ({clipItems.length})</span>
         <span className="flex items-center gap-1 text-zinc-400">
-          <kbd className="px-1 py-0.5 rounded bg-white/[0.06] border border-white/[0.08] text-[9px]">Ctrl+N</kbd>
+          <kbd className="px-1.5 py-0.5 rounded bg-white/[0.06] border border-white/[0.08] text-[9px] font-mono">Alt+D</kbd>
           <span>to dictate</span>
         </span>
       </div>

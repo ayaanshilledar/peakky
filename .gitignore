@@ -43,3 +43,8 @@ next-env.d.ts
 # Tauri / Rust
 /src-tauri/target/
 
+# graphify
+graphify-out/
+.graphify/
+
+

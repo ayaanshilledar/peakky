@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useRef, useState, useCallback } from "react";
-import { MediaState } from "../../hooks/useMedia"; 80
+import { MediaState } from "../../hooks/useMedia";
 
 interface NotchMediaViewProps {
   media: MediaState | null;

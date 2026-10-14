@@ -11,6 +11,9 @@ interface NotchHeaderProps {
   onSelectTab: (tab: NotchTab) => void;
   onStartDrag: (e: React.MouseEvent) => void;
   onOpenSettings: (e: React.MouseEvent) => void;
+  isDictating?: boolean;
+  isTranscribing?: boolean;
+  onToggleDictation?: () => void;
 }
 
 interface TabConfig {
@@ -119,6 +122,9 @@ export const NotchHeader: React.FC<NotchHeaderProps> = ({
   onSelectTab,
   onStartDrag,
   onOpenSettings,
+  isDictating,
+  isTranscribing,
+  onToggleDictation,
 }) => {
   const { isFeatureEnabled } = useFeatureFlags();
   const [hoveredTooltip, setHoveredTooltip] = useState<string | null>(null);
@@ -166,18 +172,55 @@ export const NotchHeader: React.FC<NotchHeaderProps> = ({
         })}
       </div>
 
-      {/* Right: Settings Icon Button */}
-      <button
-        onClick={onOpenSettings}
-        onMouseEnter={() => setHoveredTooltip("Settings")}
-        onMouseLeave={() => setHoveredTooltip(null)}
-        className="w-7 h-7 rounded-full bg-zinc-900/90 border border-white/[0.08] flex items-center justify-center text-zinc-400 hover:text-white hover:bg-zinc-800 active:scale-95 transition-all cursor-pointer shrink-0 shadow-sm backdrop-blur-md"
-      >
-        <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
-          <circle cx="12" cy="12" r="3" />
-          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0-.33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
-        </svg>
-      </button>
+      {/* Right Controls: Dictate Button & Settings Button */}
+      <div className="flex items-center gap-1.5 shrink-0">
+        {onToggleDictation && (
+          <button
+            onClick={onToggleDictation}
+            onMouseEnter={() =>
+              setHoveredTooltip(
+                isTranscribing
+                  ? "Transcribing..."
+                  : isDictating
+                  ? "Listening (Click to stop)"
+                  : "Voice Dictate (Alt+D / Ctrl+Space)"
+              )
+            }
+            onMouseLeave={() => setHoveredTooltip(null)}
+            className={`w-7 h-7 rounded-full border flex items-center justify-center active:scale-95 transition-all cursor-pointer shadow-sm backdrop-blur-md ${
+              isDictating
+                ? "bg-sky-950/80 border-sky-500/60 text-sky-400 shadow-[0_0_12px_rgba(14,165,233,0.4)] animate-pulse"
+                : isTranscribing
+                ? "bg-sky-950/60 border-sky-500/40 text-sky-300"
+                : "bg-zinc-900/90 border-white/[0.08] text-zinc-400 hover:text-white hover:bg-zinc-800"
+            }`}
+          >
+            {isTranscribing ? (
+              <svg className="w-3.5 h-3.5 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}>
+                <circle cx="12" cy="12" r="10" strokeDasharray="32" strokeDashoffset="12" />
+              </svg>
+            ) : (
+              <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" />
+                <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+                <line x1="12" x2="12" y1="19" y2="22" />
+              </svg>
+            )}
+          </button>
+        )}
+
+        <button
+          onClick={onOpenSettings}
+          onMouseEnter={() => setHoveredTooltip("Settings")}
+          onMouseLeave={() => setHoveredTooltip(null)}
+          className="w-7 h-7 rounded-full bg-zinc-900/90 border border-white/[0.08] flex items-center justify-center text-zinc-400 hover:text-white hover:bg-zinc-800 active:scale-95 transition-all cursor-pointer shadow-sm backdrop-blur-md"
+        >
+          <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+            <circle cx="12" cy="12" r="3" />
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
+          </svg>
+        </button>
+      </div>
 
       {/* Custom Smooth Micro Tooltip Floating Overlay */}
       {hoveredTooltip && (

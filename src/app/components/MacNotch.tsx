@@ -207,17 +207,26 @@ export default function MacNotch() {
   }, []);
 
   const [dictationSuccess, setDictationSuccess] = useState(false);
+  const [dictationLatency, setDictationLatency] = useState<number | null>(null);
   const successTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const {
     isRecording: isDictating,
     isTranscribing,
     audioLevel,
+    frequencies,
+    liveInterimText,
+    recordingDuration,
     lastTranscribedText,
+    latencyMs,
     startRecording,
     stopRecording,
-  } = useVoiceDictation(async (text) => {
-    console.log("[MacNotch] 📋 Dictation success callback triggered with text:", text);
+    cancelRecording,
+  } = useVoiceDictation(async (text, latency) => {
+    console.log(`[MacNotch] 📋 Dictation success: "${text}" in ${latency || 0}ms`);
+    if (latency) {
+      setDictationLatency(latency);
+    }
     // Copy into clipboard
     try {
       const { invoke } = await import("@tauri-apps/api/core");
@@ -243,20 +252,40 @@ export default function MacNotch() {
     }, 3000);
   });
 
-  // Global Escape & Ctrl+N hotkey listener
+  // Global Escape & Pro Voice Dictation Hotkeys (Alt+D, Ctrl+Space, Ctrl+Shift+D, Ctrl+N)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      // Escape terminates active dictation or dismisses toast immediately
       if (e.key === "Escape") {
+        if (isDictating || isTranscribing || dictationSuccess) {
+          e.preventDefault();
+          e.stopPropagation();
+          console.log("[MacNotch] 🛑 Esc pressed: terminating dictation and resetting");
+          cancelRecording();
+          setDictationSuccess(false);
+          if (successTimeoutRef.current) clearTimeout(successTimeoutRef.current);
+          return;
+        }
         setIsInputFocused(false);
         setIsEditingTimer(false);
         setIsHovered(false);
         return;
       }
 
-      // Ctrl + N or Cmd + N Voice Dictation Trigger
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "n") {
+      // Pro Voice Dictation Hotkeys:
+      // 1. Alt + D (D for Dictate)
+      // 2. Ctrl + Space (Wispr / Raycast style)
+      // 3. Ctrl + Shift + D
+      // 4. Ctrl + N (legacy fallback)
+      const isAltD = e.altKey && e.key.toLowerCase() === "d";
+      const isCtrlSpace = (e.ctrlKey || e.metaKey) && (e.code === "Space" || e.key === " ");
+      const isCtrlShiftD = (e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === "d";
+      const isLegacyCtrlN = (e.ctrlKey || e.metaKey) && !e.shiftKey && e.key.toLowerCase() === "n";
+
+      if (isAltD || isCtrlSpace || isCtrlShiftD || isLegacyCtrlN) {
         e.preventDefault();
-        console.log("[MacNotch] ⌨️ Ctrl+N shortcut pressed! Current isDictating:", isDictating);
+        e.stopPropagation();
+        console.log("[MacNotch] 🎙️ Hotkey triggered! Current isDictating:", isDictating);
         if (isDictating) {
           stopRecording();
         } else {
@@ -266,7 +295,7 @@ export default function MacNotch() {
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [isDictating, startRecording, stopRecording]);
+  }, [isDictating, isTranscribing, dictationSuccess, startRecording, stopRecording, cancelRecording]);
 
   // Restore saved horizontal notch position on launch
   useEffect(() => {
@@ -416,8 +445,12 @@ export default function MacNotch() {
             isDictating={isDictating}
             isTranscribing={isTranscribing}
             audioLevel={audioLevel}
+            frequencies={frequencies}
+            liveInterimText={liveInterimText}
+            recordingDuration={recordingDuration}
             dictationSuccess={dictationSuccess}
             lastDictatedText={lastTranscribedText}
+            dictationLatency={dictationLatency}
             onStartDrag={handleStartDrag}
           />
         ) : (
@@ -428,6 +461,15 @@ export default function MacNotch() {
               onSelectTab={setActiveTab}
               onStartDrag={handleStartDrag}
               onOpenSettings={handleOpenSettings}
+              isDictating={isDictating}
+              isTranscribing={isTranscribing}
+              onToggleDictation={() => {
+                if (isDictating) {
+                  stopRecording();
+                } else {
+                  startRecording();
+                }
+              }}
             />
 
             {activeTab === "home" && (

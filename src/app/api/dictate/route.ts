@@ -3,26 +3,113 @@ import { NextResponse } from "next/server";
 export const runtime = "nodejs";
 
 export async function POST(req: Request) {
+  const requestStart = Date.now();
   try {
-    console.log("[api/dictate] 📨 Incoming voice dictation request");
     const formData = await req.formData();
     const audioFile = formData.get("file") as Blob | null;
 
     if (!audioFile) {
-      console.warn("[api/dictate] ⚠️ No audio file in FormData");
       return NextResponse.json(
         { error: "No audio file provided in request" },
         { status: 400 }
       );
     }
 
-    console.log(`[api/dictate] Received audio blob: type=${audioFile.type}, size=${audioFile.size} bytes`);
+    const groqKey = (process.env.GROQ_API_KEY || "").trim();
+    const openaiKey = (process.env.OPENAI_API_KEY || "").trim();
+    const assemblyKey = (process.env.ASSEMBLYAI_API_KEY || "").trim();
+    const elevenKey = (process.env.ELEVENLABS_API_KEY || "").trim();
 
-    const apiKey = (
-      process.env.GROQ_API_KEY ||
-      process.env.OPENAI_API_KEY ||
-      ""
-    ).trim();
+    // 1. ELEVENLABS SCRIBE (If explicitly configured)
+    if (elevenKey && process.env.DICTATION_PROVIDER === "elevenlabs") {
+      console.log("[api/dictate] 🎙️ Using ElevenLabs Scribe API");
+      const elevenFormData = new FormData();
+      elevenFormData.append("file", audioFile, "audio.webm");
+      elevenFormData.append("model_id", "scribe_v1");
+
+      const elevenRes = await fetch("https://api.elevenlabs.io/v1/speech-to-text", {
+        method: "POST",
+        headers: { "xi-api-key": elevenKey },
+        body: elevenFormData,
+      });
+
+      if (elevenRes.ok) {
+        const elevenData = await elevenRes.json();
+        const text = (elevenData.text || "").trim();
+        return NextResponse.json({
+          text,
+          provider: "elevenlabs",
+          latencyMs: Date.now() - requestStart,
+        });
+      }
+      console.warn("[api/dictate] ElevenLabs failed, falling back to Groq/Whisper");
+    }
+
+    // 2. ASSEMBLYAI (If explicitly configured)
+    if (assemblyKey && process.env.DICTATION_PROVIDER === "assemblyai") {
+      console.log("[api/dictate] 🎙️ Using AssemblyAI Universal-1");
+      const arrayBuffer = await audioFile.arrayBuffer();
+      const uploadRes = await fetch("https://api.assemblyai.com/v2/upload", {
+        method: "POST",
+        headers: {
+          authorization: assemblyKey,
+          "content-type": "application/octet-stream",
+        },
+        body: arrayBuffer,
+      });
+
+      if (uploadRes.ok) {
+        const { upload_url } = await uploadRes.json();
+        const transcriptRes = await fetch("https://api.assemblyai.com/v2/transcript", {
+          method: "POST",
+          headers: {
+            authorization: assemblyKey,
+            "content-type": "application/json",
+          },
+          body: JSON.stringify({
+            audio_url: upload_url,
+            speech_model: "nano", // Nano model for fast sub-second turnaround
+          }),
+        });
+
+        if (transcriptRes.ok) {
+          const { id } = await transcriptRes.json();
+          // Poll for completion (nano model completes in 500-1000ms)
+          let completed = false;
+          let transcriptText = "";
+          for (let i = 0; i < 15; i++) {
+            await new Promise((r) => setTimeout(r, 250));
+            const pollRes = await fetch(`https://api.assemblyai.com/v2/transcript/${id}`, {
+              headers: { authorization: assemblyKey },
+            });
+            if (pollRes.ok) {
+              const pollData = await pollRes.json();
+              if (pollData.status === "completed") {
+                transcriptText = pollData.text || "";
+                completed = true;
+                break;
+              } else if (pollData.status === "error") {
+                break;
+              }
+            }
+          }
+
+          if (completed) {
+            return NextResponse.json({
+              text: transcriptText.trim(),
+              provider: "assemblyai",
+              latencyMs: Date.now() - requestStart,
+            });
+          }
+        }
+      }
+      console.warn("[api/dictate] AssemblyAI failed, falling back to Groq/Whisper");
+    }
+
+    // 3. GROQ WHISPER TURBO (FASTEST IN THE WORLD - SUB-200ms)
+    // Default to Groq LPU if Groq key or OpenAI key starting with 'gsk_' is present
+    const isGroq = groqKey.length > 0 || openaiKey.startsWith("gsk_");
+    const apiKey = isGroq ? (groqKey || openaiKey) : openaiKey;
 
     if (!apiKey) {
       console.error("[api/dictate] ❌ No GROQ_API_KEY or OPENAI_API_KEY configured");
@@ -32,61 +119,46 @@ export async function POST(req: Request) {
       );
     }
 
-    // Determine target Whisper endpoint
-    const isGroq = apiKey.startsWith("gsk_") || Boolean(process.env.GROQ_API_KEY);
     const targetUrl = isGroq
       ? "https://api.groq.com/openai/v1/audio/transcriptions"
       : "https://api.openai.com/v1/audio/transcriptions";
 
-    const targetModel = isGroq ? "whisper-large-v3" : "whisper-1";
+    // whisper-large-v3-turbo is ~8x faster than whisper-large-v3, completing in ~120-200ms on Groq LPUs
+    const targetModel = isGroq ? "whisper-large-v3-turbo" : "whisper-1";
 
-    console.log(`[api/dictate] Forwarding to ${isGroq ? "Groq" : "OpenAI"} (${targetModel})`);
+    const upstreamFormData = new FormData();
+    upstreamFormData.append("file", audioFile, "audio.webm");
+    upstreamFormData.append("model", targetModel);
+    upstreamFormData.append("response_format", "json");
+    // Greedy decoding (temperature 0) eliminates sampling cycles for maximum speed
+    upstreamFormData.append("temperature", "0");
+    upstreamFormData.append("language", "en");
+    upstreamFormData.append(
+      "prompt",
+      "Developer notes, code commands, dictation thoughts, clear punctuation."
+    );
 
-    const groqFormData = new FormData();
-    groqFormData.append("file", audioFile, "audio.webm");
-    groqFormData.append("model", targetModel);
-    groqFormData.append("response_format", "json");
-    groqFormData.append("temperature", "0.2");
-    groqFormData.append("language", "en");
-    // Priming prompt directs Whisper decoder to expect developer speech/notes rather than video credits
-    groqFormData.append("prompt", "Transcribe clear spoken notes, developer thoughts, commands, and tasks without video credits.");
-
-    // Debug: in development, save audio buffer to disk to verify microphone captured audible speech
-    if (process.env.NODE_ENV !== "production") {
-      try {
-        const fs = await import("fs");
-        const path = await import("path");
-        const arrayBuf = await audioFile.arrayBuffer();
-        const debugPath = path.resolve(process.cwd(), ".last_dictation.webm");
-        fs.writeFileSync(debugPath, Buffer.from(arrayBuf));
-        console.log(`[api/dictate] 💾 Debug audio saved to ${debugPath} (${arrayBuf.byteLength} bytes)`);
-      } catch (saveErr) {
-        console.warn("[api/dictate] Debug audio save warning:", saveErr);
-      }
-    }
-
-    const startTime = Date.now();
-    const response = await fetch(targetUrl, {
+    const upstreamResponse = await fetch(targetUrl, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${apiKey}`,
       },
-      body: groqFormData,
+      body: upstreamFormData,
     });
 
-    const elapsedMs = Date.now() - startTime;
-    console.log(`[api/dictate] Upstream response: status=${response.status} in ${elapsedMs}ms`);
+    const elapsedMs = Date.now() - requestStart;
+    console.log(`[api/dictate] ⚡ ${isGroq ? "Groq Turbo" : "OpenAI"} responded in ${elapsedMs}ms (HTTP ${upstreamResponse.status})`);
 
-    if (!response.ok) {
-      const errText = await response.text();
-      console.error("[api/dictate] ❌ Upstream transcription error body:", errText);
+    if (!upstreamResponse.ok) {
+      const errText = await upstreamResponse.text();
+      console.error("[api/dictate] ❌ Upstream transcription error:", errText);
       return NextResponse.json(
         { error: "Transcription service error", details: errText },
-        { status: response.status }
+        { status: upstreamResponse.status }
       );
     }
 
-    const data = await response.json();
+    const data = await upstreamResponse.json();
     let text = (data.text || "").trim();
 
     // Blacklist filter against known Whisper silence / YouTube dataset hallucinations
@@ -105,13 +177,14 @@ export async function POST(req: Request) {
     ];
 
     if (SILENCE_HALLUCINATIONS.includes(text.toLowerCase())) {
-      console.warn(`[api/dictate] ⚠️ Filtered out known Whisper silence hallucination: "${text}"`);
       text = "";
     }
 
-    console.log(`[api/dictate] ✅ Transcribed text (${text.length} chars): "${text}"`);
-
-    return NextResponse.json({ text });
+    return NextResponse.json({
+      text,
+      provider: isGroq ? "groq-whisper-turbo" : "openai",
+      latencyMs: elapsedMs,
+    });
   } catch (err: unknown) {
     console.error("[api/dictate] ❌ Unhandled route exception:", err);
     return NextResponse.json(
@@ -120,3 +193,4 @@ export async function POST(req: Request) {
     );
   }
 }
+

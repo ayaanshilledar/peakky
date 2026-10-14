@@ -156,16 +156,16 @@ export function getNotchDimensionSpec(
   // 3. Collapsed Pill Variants (Dynamic Island Compact Mode)
   if (state.isDictating) {
     return {
-      width: 260,
-      height: 34,
-      classes: "w-[260px] h-[34px] px-3.5 flex items-center justify-between border-rose-500/40 shadow-lg shadow-rose-500/10",
+      width: 290,
+      height: 35,
+      classes: "w-[290px] h-[35px] px-3 flex items-center justify-between border-sky-500/30 shadow-[0_4px_24px_rgba(14,165,233,0.18)] bg-black/95 backdrop-blur-2xl",
     };
   }
   if (state.dictationSuccess) {
     return {
-      width: 250,
-      height: 34,
-      classes: "w-[250px] h-[34px] px-3.5 flex items-center justify-between border-emerald-500/40 shadow-lg shadow-emerald-500/10",
+      width: 280,
+      height: 35,
+      classes: "w-[280px] h-[35px] px-3 flex items-center justify-between border-emerald-500/25 shadow-[0_4px_20px_rgba(16,185,129,0.1)] bg-black/95 backdrop-blur-2xl",
     };
   }
   if (state.activeHUD) {
