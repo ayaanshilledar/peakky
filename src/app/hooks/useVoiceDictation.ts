@@ -43,6 +43,8 @@ export function useVoiceDictation(onTranscribeSuccess?: (text: string) => void):
     setAudioLevel(0);
   }, []);
 
+  const maxAudioLevelRef = useRef<number>(0);
+
   const monitorAudioLevel = useCallback(() => {
     if (!analyserRef.current) return;
     const dataArray = new Uint8Array(analyserRef.current.frequencyBinCount);
@@ -57,6 +59,10 @@ export function useVoiceDictation(onTranscribeSuccess?: (text: string) => void):
     const normalized = Math.min(100, Math.round((average / 128) * 100));
     setAudioLevel(normalized);
 
+    if (normalized > maxAudioLevelRef.current) {
+      maxAudioLevelRef.current = normalized;
+    }
+
     animationFrameRef.current = requestAnimationFrame(monitorAudioLevel);
   }, []);
 
@@ -65,13 +71,15 @@ export function useVoiceDictation(onTranscribeSuccess?: (text: string) => void):
       console.log("[Dictation] 🎙️ Requesting microphone stream...");
       setError(null);
       audioChunksRef.current = [];
+      maxAudioLevelRef.current = 0;
 
+      // Allow browser and OS to use native hardware sample rate (avoids WASAPI muting/distortion)
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
           channelCount: 1,
-          sampleRate: 16000,
           echoCancellation: true,
           noiseSuppression: true,
+          autoGainControl: true,
         },
       });
       streamRef.current = stream;
@@ -106,7 +114,8 @@ export function useVoiceDictation(onTranscribeSuccess?: (text: string) => void):
         }
       };
 
-      mediaRecorder.start(100); // 100ms chunks
+      // Start continuous recording without micro-timeslices to preserve clean WebM container headers
+      mediaRecorder.start();
       setIsRecording(true);
       console.log("[Dictation] 🔴 Recording started");
     } catch (err: unknown) {
@@ -140,9 +149,11 @@ export function useVoiceDictation(onTranscribeSuccess?: (text: string) => void):
         }
 
         const audioBlob = new Blob(chunks, { type: "audio/webm" });
-        console.log(`[Dictation] Audio blob size: ${audioBlob.size} bytes`);
-        if (audioBlob.size < 1000) {
-          console.warn("[Dictation] ⚠️ Audio blob too small (<1KB, silence or accidental quick tap)");
+        console.log(`[Dictation] Audio blob size: ${audioBlob.size} bytes, maxAudioLevel: ${maxAudioLevelRef.current}`);
+
+        // If audio blob is tiny or microphone detected zero speech energy
+        if (audioBlob.size < 2000 || maxAudioLevelRef.current < 2) {
+          console.warn("[Dictation] ⚠️ Near-zero audio energy or audio too short; skipping Whisper to avoid silence hallucination");
           resolve(null);
           return;
         }

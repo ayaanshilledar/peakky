@@ -47,6 +47,9 @@ export async function POST(req: Request) {
     groqFormData.append("model", targetModel);
     groqFormData.append("response_format", "json");
     groqFormData.append("temperature", "0");
+    groqFormData.append("language", "en");
+    // Priming prompt directs Whisper decoder to expect developer speech/notes rather than video credits
+    groqFormData.append("prompt", "Transcribe clear spoken notes, developer thoughts, commands, and tasks without video credits.");
 
     const startTime = Date.now();
     const response = await fetch(targetUrl, {
@@ -70,7 +73,28 @@ export async function POST(req: Request) {
     }
 
     const data = await response.json();
-    const text = (data.text || "").trim();
+    let text = (data.text || "").trim();
+
+    // Blacklist filter against known Whisper silence / YouTube dataset hallucinations
+    const SILENCE_HALLUCINATIONS = [
+      "thank you.",
+      "thank you",
+      "thanks for watching.",
+      "thanks for watching",
+      "thank you for watching.",
+      "thank you for watching",
+      "subtitles by",
+      "bye.",
+      "bye",
+      "you",
+      ".",
+    ];
+
+    if (SILENCE_HALLUCINATIONS.includes(text.toLowerCase())) {
+      console.warn(`[api/dictate] ⚠️ Filtered out known Whisper silence hallucination: "${text}"`);
+      text = "";
+    }
+
     console.log(`[api/dictate] ✅ Transcribed text (${text.length} chars): "${text}"`);
 
     return NextResponse.json({ text });
