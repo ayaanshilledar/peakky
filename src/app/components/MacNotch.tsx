@@ -217,6 +217,7 @@ export default function MacNotch() {
     startRecording,
     stopRecording,
   } = useVoiceDictation(async (text) => {
+    console.log("[MacNotch] 📋 Dictation success callback triggered with text:", text);
     // Copy into clipboard
     try {
       const { invoke } = await import("@tauri-apps/api/core");
@@ -224,8 +225,15 @@ export default function MacNotch() {
         content: text,
         itemType: "text",
       });
-    } catch {
-      await navigator.clipboard.writeText(text);
+      console.log("[MacNotch] ✓ Invoked Tauri copy_to_clipboard successfully");
+    } catch (tauriErr) {
+      console.warn("[MacNotch] ⚠️ Tauri invoke failed, falling back to navigator.clipboard:", tauriErr);
+      try {
+        await navigator.clipboard.writeText(text);
+        console.log("[MacNotch] ✓ Browser navigator.clipboard.writeText successful");
+      } catch (clipErr) {
+        console.error("[MacNotch] ❌ All clipboard copy methods failed:", clipErr);
+      }
     }
 
     setDictationSuccess(true);
@@ -248,6 +256,7 @@ export default function MacNotch() {
       // Ctrl + N or Cmd + N Voice Dictation Trigger
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "n") {
         e.preventDefault();
+        console.log("[MacNotch] ⌨️ Ctrl+N shortcut pressed! Current isDictating:", isDictating);
         if (isDictating) {
           stopRecording();
         } else {
