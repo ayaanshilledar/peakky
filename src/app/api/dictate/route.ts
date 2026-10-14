@@ -46,10 +46,24 @@ export async function POST(req: Request) {
     groqFormData.append("file", audioFile, "audio.webm");
     groqFormData.append("model", targetModel);
     groqFormData.append("response_format", "json");
-    groqFormData.append("temperature", "0");
+    groqFormData.append("temperature", "0.2");
     groqFormData.append("language", "en");
     // Priming prompt directs Whisper decoder to expect developer speech/notes rather than video credits
     groqFormData.append("prompt", "Transcribe clear spoken notes, developer thoughts, commands, and tasks without video credits.");
+
+    // Debug: in development, save audio buffer to disk to verify microphone captured audible speech
+    if (process.env.NODE_ENV !== "production") {
+      try {
+        const fs = await import("fs");
+        const path = await import("path");
+        const arrayBuf = await audioFile.arrayBuffer();
+        const debugPath = path.resolve(process.cwd(), ".last_dictation.webm");
+        fs.writeFileSync(debugPath, Buffer.from(arrayBuf));
+        console.log(`[api/dictate] 💾 Debug audio saved to ${debugPath} (${arrayBuf.byteLength} bytes)`);
+      } catch (saveErr) {
+        console.warn("[api/dictate] Debug audio save warning:", saveErr);
+      }
+    }
 
     const startTime = Date.now();
     const response = await fetch(targetUrl, {

@@ -86,18 +86,18 @@ export const EXPANDED_FEATURE_DIMENSIONS: Record<
           classes: "w-[410px] h-[230px] pt-2 px-3.5 pb-3.5",
         },
 
-  // Media: Ultra-compact when inactive; hi-fi controller when playing
+  // Media: Apple Dynamic Island / Now Playing style proportions
   media: (state) =>
     !state?.isMediaActive
       ? {
-          width: 350,
-          height: 130,
-          classes: "w-[350px] h-[130px] pt-2 px-3 pb-3",
+          width: 360,
+          height: 140,
+          classes: "w-[360px] h-[140px] pt-2 px-3.5 pb-3",
         }
       : {
-          width: 390,
-          height: 180,
-          classes: "w-[390px] h-[180px] pt-2 px-3.5 pb-3.5",
+          width: 420,
+          height: 200,
+          classes: "w-[420px] h-[200px] pt-2 px-4 pb-3.5",
         },
 
   // System: Telemetry dashboard with CPU sparkline, memory, GPU, disk, and network

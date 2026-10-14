@@ -73,7 +73,7 @@ export function useVoiceDictation(onTranscribeSuccess?: (text: string) => void):
       audioChunksRef.current = [];
       maxAudioLevelRef.current = 0;
 
-      // Allow browser and OS to use native hardware sample rate (avoids WASAPI muting/distortion)
+      // Request stream with high quality voice processing
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
           channelCount: 1,
@@ -83,23 +83,36 @@ export function useVoiceDictation(onTranscribeSuccess?: (text: string) => void):
         },
       });
       streamRef.current = stream;
-      console.log("[Dictation] ✓ Microphone access granted, track active:", stream.getAudioTracks()[0]?.label);
+      const audioTrack = stream.getAudioTracks()[0];
+      console.log("[Dictation] ✓ Microphone access granted, track active:", audioTrack?.label, "enabled:", audioTrack?.enabled, "readyState:", audioTrack?.readyState);
 
-      // Setup audio analysis for live waveform animation
-      const AudioCtx =
-        window.AudioContext ||
-        (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-      const audioCtx = new AudioCtx();
-      audioContextRef.current = audioCtx;
-      const source = audioCtx.createMediaStreamSource(stream);
-      const analyser = audioCtx.createAnalyser();
-      analyser.fftSize = 64;
-      source.connect(analyser);
-      analyserRef.current = analyser;
+      // Clone stream for Web Audio API visualizer so AnalyserNode cannot mute or block MediaRecorder
+      const visualizerStream = stream.clone();
 
-      monitorAudioLevel();
+      try {
+        const AudioCtx =
+          window.AudioContext ||
+          (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+        const audioCtx = new AudioCtx();
+        audioContextRef.current = audioCtx;
 
-      // Configure MediaRecorder
+        // Ensure AudioContext is actively running (Chromium starts in suspended state)
+        if (audioCtx.state === "suspended") {
+          await audioCtx.resume();
+        }
+
+        const source = audioCtx.createMediaStreamSource(visualizerStream);
+        const analyser = audioCtx.createAnalyser();
+        analyser.fftSize = 64;
+        source.connect(analyser);
+        analyserRef.current = analyser;
+
+        monitorAudioLevel();
+      } catch (audioCtxErr) {
+        console.warn("[Dictation] AudioContext visualizer init warning (recording will still proceed):", audioCtxErr);
+      }
+
+      // Configure MediaRecorder directly on the clean hardware stream
       const mimeType = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
         ? "audio/webm;codecs=opus"
         : "audio/webm";
@@ -114,7 +127,7 @@ export function useVoiceDictation(onTranscribeSuccess?: (text: string) => void):
         }
       };
 
-      // Start continuous recording without micro-timeslices to preserve clean WebM container headers
+      // Continuous recording
       mediaRecorder.start();
       setIsRecording(true);
       console.log("[Dictation] 🔴 Recording started");
@@ -197,6 +210,13 @@ export function useVoiceDictation(onTranscribeSuccess?: (text: string) => void):
         }
       };
 
+      try {
+        if (recorder.state === "recording") {
+          recorder.requestData();
+        }
+      } catch (reqErr) {
+        console.warn("[Dictation] requestData warning:", reqErr);
+      }
       recorder.stop();
     });
   }, [cleanupAudio, isRecording, onTranscribeSuccess]);
