@@ -512,7 +512,7 @@ export default function SettingsPage() {
                 <div>
                   <h2 className="text-sm font-semibold text-white tracking-tight">Clipboard History</h2>
                   <p className="text-xs text-zinc-400 mt-0.5">
-                    Log of captured texts, URLs, and screenshots.
+                    Log of captured texts, screenshots, and <span className="text-zinc-200 font-mono">Ctrl+N</span> voice dictations.
                   </p>
                 </div>
                 {clipItems.length > 0 && (
