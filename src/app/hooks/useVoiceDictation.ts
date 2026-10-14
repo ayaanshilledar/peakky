@@ -62,6 +62,7 @@ export function useVoiceDictation(onTranscribeSuccess?: (text: string) => void):
 
   const startRecording = useCallback(async () => {
     try {
+      console.log("[Dictation] 🎙️ Requesting microphone stream...");
       setError(null);
       audioChunksRef.current = [];
 
@@ -74,6 +75,7 @@ export function useVoiceDictation(onTranscribeSuccess?: (text: string) => void):
         },
       });
       streamRef.current = stream;
+      console.log("[Dictation] ✓ Microphone access granted, track active:", stream.getAudioTracks()[0]?.label);
 
       // Setup audio analysis for live waveform animation
       const AudioCtx =
@@ -94,6 +96,7 @@ export function useVoiceDictation(onTranscribeSuccess?: (text: string) => void):
         ? "audio/webm;codecs=opus"
         : "audio/webm";
 
+      console.log("[Dictation] Starting MediaRecorder with mimeType:", mimeType);
       const mediaRecorder = new MediaRecorder(stream, { mimeType });
       mediaRecorderRef.current = mediaRecorder;
 
@@ -105,14 +108,16 @@ export function useVoiceDictation(onTranscribeSuccess?: (text: string) => void):
 
       mediaRecorder.start(100); // 100ms chunks
       setIsRecording(true);
+      console.log("[Dictation] 🔴 Recording started");
     } catch (err: unknown) {
-      console.error("Failed to start voice recording:", err);
+      console.error("[Dictation] ❌ Failed to start recording:", err);
       setError("Microphone permission denied or unavailable");
       cleanupAudio();
     }
   }, [cleanupAudio, monitorAudioLevel]);
 
   const stopRecording = useCallback(async (): Promise<string | null> => {
+    console.log("[Dictation] 🛑 stopRecording triggered. isRecording:", isRecording);
     if (!mediaRecorderRef.current || !isRecording) {
       cleanupAudio();
       setIsRecording(false);
@@ -127,19 +132,23 @@ export function useVoiceDictation(onTranscribeSuccess?: (text: string) => void):
         setIsRecording(false);
 
         const chunks = audioChunksRef.current;
+        console.log(`[Dictation] Recorder stopped. Chunks collected: ${chunks.length}`);
         if (chunks.length === 0) {
+          console.warn("[Dictation] ⚠️ No audio chunks captured");
           resolve(null);
           return;
         }
 
         const audioBlob = new Blob(chunks, { type: "audio/webm" });
+        console.log(`[Dictation] Audio blob size: ${audioBlob.size} bytes`);
         if (audioBlob.size < 1000) {
-          // Extremely small audio (silence or accidental quick tap)
+          console.warn("[Dictation] ⚠️ Audio blob too small (<1KB, silence or accidental quick tap)");
           resolve(null);
           return;
         }
 
         setIsTranscribing(true);
+        console.log("[Dictation] ⏳ Sending audio blob to /api/dictate...");
         try {
           const formData = new FormData();
           formData.append("file", audioBlob, "dictation.webm");
@@ -149,22 +158,27 @@ export function useVoiceDictation(onTranscribeSuccess?: (text: string) => void):
             body: formData,
           });
 
+          console.log(`[Dictation] API response status: ${res.status}`);
           if (!res.ok) {
-            throw new Error(`Server returned ${res.status}`);
+            const errBody = await res.text();
+            console.error("[Dictation] ❌ API error body:", errBody);
+            throw new Error(`Server returned ${res.status}: ${errBody}`);
           }
 
           const data = await res.json();
           const transcribedText = (data.text || "").trim();
+          console.log("[Dictation] ✅ Transcription received:", transcribedText);
 
           if (transcribedText) {
             setLastTranscribedText(transcribedText);
             onTranscribeSuccess?.(transcribedText);
             resolve(transcribedText);
           } else {
+            console.warn("[Dictation] ⚠️ Transcription returned empty text");
             resolve(null);
           }
         } catch (err: unknown) {
-          console.error("Transcription failed:", err);
+          console.error("[Dictation] ❌ Transcription failed:", err);
           setError("Failed to transcribe audio.");
           resolve(null);
         } finally {

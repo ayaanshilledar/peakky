@@ -17,6 +17,20 @@ export interface ClipboardItem {
 const CLIPBOARD_STORAGE_KEY = "peaky_clipboard_history_v1";
 const CLIPBOARD_CHANNEL = "peaky_clipboard_sync_channel";
 const MAX_CLIPBOARD_ITEMS = 40;
+export const MAX_CLIPBOARD_AGE_MS = 24 * 60 * 60 * 1000; // 24 hours max retention
+
+/**
+ * Filter clips to keep only those within the 24-hour retention window (or pinned items).
+ */
+export function pruneExpiredClips(
+  clips: ClipboardItem[],
+  now: number = Date.now()
+): ClipboardItem[] {
+  return clips.filter((item) => {
+    const age = now - item.timestamp;
+    return item.pinned || (age >= 0 && age <= MAX_CLIPBOARD_AGE_MS);
+  });
+}
 
 export function useClipboardStore() {
   const [items, setItems] = useState<ClipboardItem[]>([]);
@@ -26,12 +40,17 @@ export function useClipboardStore() {
   const channelRef = useRef<BroadcastChannel | null>(null);
   const isBroadcastingRef = useRef<boolean>(false);
 
-  // Initialize store and BroadcastChannel
+  // Initialize store, auto-prune expired clips (>24h), and setup BroadcastChannel
   useEffect(() => {
     try {
       const saved = localStorage.getItem(CLIPBOARD_STORAGE_KEY);
       if (saved) {
-        setItems(JSON.parse(saved));
+        const parsed: ClipboardItem[] = JSON.parse(saved);
+        const valid = pruneExpiredClips(parsed);
+        setItems(valid);
+        if (valid.length !== parsed.length) {
+          localStorage.setItem(CLIPBOARD_STORAGE_KEY, JSON.stringify(valid));
+        }
       }
     } catch (e) {
       console.error("Failed to load clipboard store from storage:", e);
@@ -45,18 +64,42 @@ export function useClipboardStore() {
         if (!event.data) return;
         isBroadcastingRef.current = true;
         const { type, payload } = event.data;
-        if (type === "SYNC_CLIPBOARD") {
-          setItems(payload);
+        if (type === "SYNC_CLIPBOARD" && Array.isArray(payload)) {
+          setItems(pruneExpiredClips(payload));
         }
         setTimeout(() => {
           isBroadcastingRef.current = false;
         }, 50);
       };
-
-      return () => {
-        channel.close();
-      };
     }
+
+    // Periodic auto-prune timer every 60 seconds to prune clips exceeding 24 hours
+    const interval = setInterval(() => {
+      setItems((prev) => {
+        const now = Date.now();
+        const valid = pruneExpiredClips(prev, now);
+        if (valid.length !== prev.length) {
+          try {
+            localStorage.setItem(CLIPBOARD_STORAGE_KEY, JSON.stringify(valid));
+            if (channelRef.current && !isBroadcastingRef.current) {
+              channelRef.current.postMessage({
+                type: "SYNC_CLIPBOARD",
+                payload: valid,
+              });
+            }
+          } catch {}
+          return valid;
+        }
+        return prev;
+      });
+    }, 60 * 1000);
+
+    return () => {
+      clearInterval(interval);
+      if (channelRef.current) {
+        channelRef.current.close();
+      }
+    };
   }, []);
 
   // Listen to Tauri backend event "clipboard-new-item"
@@ -71,12 +114,14 @@ export function useClipboardStore() {
           if (!newItem || !newItem.content) return;
 
           setItems((prev) => {
+            const now = Date.now();
+            const unexpired = pruneExpiredClips(prev, now);
             // Check if identical item already at top
-            if (prev.length > 0 && prev[0].content === newItem.content) {
-              return prev;
+            if (unexpired.length > 0 && unexpired[0].content === newItem.content) {
+              return unexpired;
             }
             // Remove previous duplicate if present to bring to top
-            const filtered = prev.filter((item) => item.content !== newItem.content);
+            const filtered = unexpired.filter((item) => item.content !== newItem.content);
             const updated = [newItem, ...filtered].slice(0, MAX_CLIPBOARD_ITEMS);
             
             try {
@@ -177,8 +222,13 @@ export function useClipboardStore() {
     });
   }, [broadcastItems]);
 
-  // Filtered items based on search and type
-  const filteredItems = items.filter((item) => {
+  const now = Date.now();
+  const unexpiredItems = items.filter(
+    (item) => item.pinned || (now - item.timestamp >= 0 && now - item.timestamp <= MAX_CLIPBOARD_AGE_MS)
+  );
+
+  // Filtered items based on search and type (strictly within 24h retention)
+  const filteredItems = unexpiredItems.filter((item) => {
     if (filterType === "text" && item.type !== "text") return false;
     if (filterType === "image" && item.type !== "image") return false;
     if (!searchQuery.trim()) return true;
@@ -191,7 +241,7 @@ export function useClipboardStore() {
   });
 
   return {
-    items,
+    items: unexpiredItems,
     filteredItems,
     copiedId,
     searchQuery,
