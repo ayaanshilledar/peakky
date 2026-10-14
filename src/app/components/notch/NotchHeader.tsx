@@ -11,9 +11,6 @@ interface NotchHeaderProps {
   onSelectTab: (tab: NotchTab) => void;
   onStartDrag: (e: React.MouseEvent) => void;
   onOpenSettings: (e: React.MouseEvent) => void;
-  isDictating?: boolean;
-  isTranscribing?: boolean;
-  onToggleDictation?: () => void;
 }
 
 interface TabConfig {
@@ -122,9 +119,6 @@ export const NotchHeader: React.FC<NotchHeaderProps> = ({
   onSelectTab,
   onStartDrag,
   onOpenSettings,
-  isDictating,
-  isTranscribing,
-  onToggleDictation,
 }) => {
   const { isFeatureEnabled } = useFeatureFlags();
   const [hoveredTooltip, setHoveredTooltip] = useState<string | null>(null);
@@ -172,43 +166,8 @@ export const NotchHeader: React.FC<NotchHeaderProps> = ({
         })}
       </div>
 
-      {/* Right Controls: Dictate Button & Settings Button */}
+      {/* Right Controls: Settings Button */}
       <div className="flex items-center gap-1.5 shrink-0">
-        {onToggleDictation && (
-          <button
-            onClick={onToggleDictation}
-            onMouseEnter={() =>
-              setHoveredTooltip(
-                isTranscribing
-                  ? "Transcribing..."
-                  : isDictating
-                  ? "Listening (Click to stop)"
-                  : "Voice Dictate (Alt+D / Ctrl+Space)"
-              )
-            }
-            onMouseLeave={() => setHoveredTooltip(null)}
-            className={`w-7 h-7 rounded-full border flex items-center justify-center active:scale-95 transition-all cursor-pointer shadow-sm backdrop-blur-md ${
-              isDictating
-                ? "bg-sky-950/80 border-sky-500/60 text-sky-400 shadow-[0_0_12px_rgba(14,165,233,0.4)] animate-pulse"
-                : isTranscribing
-                ? "bg-sky-950/60 border-sky-500/40 text-sky-300"
-                : "bg-zinc-900/90 border-white/[0.08] text-zinc-400 hover:text-white hover:bg-zinc-800"
-            }`}
-          >
-            {isTranscribing ? (
-              <svg className="w-3.5 h-3.5 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}>
-                <circle cx="12" cy="12" r="10" strokeDasharray="32" strokeDashoffset="12" />
-              </svg>
-            ) : (
-              <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
-                <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" />
-                <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
-                <line x1="12" x2="12" y1="19" y2="22" />
-              </svg>
-            )}
-          </button>
-        )}
-
         <button
           onClick={onOpenSettings}
           onMouseEnter={() => setHoveredTooltip("Settings")}
@@ -224,8 +183,8 @@ export const NotchHeader: React.FC<NotchHeaderProps> = ({
 
       {/* Custom Smooth Micro Tooltip Floating Overlay */}
       {hoveredTooltip && (
-        <div className="absolute top-9 left-1/2 -translate-x-1/2 z-50 pointer-events-none">
-          <div className="bg-zinc-900/95 text-white text-[10px] font-medium px-2 py-0.5 rounded-md border border-white/10 shadow-xl backdrop-blur-md animate-in fade-in zoom-in-95 duration-150 whitespace-nowrap">
+        <div className="absolute top-9 left-1/2 -translate-x-1/2 z-50 pointer-events-none max-w-[340px]">
+          <div className="bg-zinc-900/95 text-white text-[10px] font-medium px-2.5 py-1 rounded-md border border-white/10 shadow-2xl backdrop-blur-md animate-in fade-in zoom-in-95 duration-150 text-center leading-tight">
             {hoveredTooltip}
           </div>
         </div>

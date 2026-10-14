@@ -461,15 +461,6 @@ export default function MacNotch() {
               onSelectTab={setActiveTab}
               onStartDrag={handleStartDrag}
               onOpenSettings={handleOpenSettings}
-              isDictating={isDictating}
-              isTranscribing={isTranscribing}
-              onToggleDictation={() => {
-                if (isDictating) {
-                  stopRecording();
-                } else {
-                  startRecording();
-                }
-              }}
             />
 
             {activeTab === "home" && (

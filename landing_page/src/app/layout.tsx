@@ -19,9 +19,8 @@ const newsreader = Newsreader({
 });
 
 export const metadata: Metadata = {
-  title: "Peaky — Minimalist Dynamic Island & Productivity Notch",
-  description:
-    "A discreet, tactile floating notch that seamlessly snaps to your display bezel — integrating Focus Timer, Tasks, iCal Meeting Sync, and Clipboard History.",
+  title: "Peaky",
+  description: "Minimalist Dynamic Island & Productivity Notch",
 };
 
 export default function RootLayout({
@@ -34,7 +33,7 @@ export default function RootLayout({
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} ${newsreader.variable} h-full antialiased dark`}
     >
-      <body className="min-h-full flex flex-col bg-[#08080a] text-[#ededed] font-sans selection:bg-white/20 selection:text-white">
+      <body className="min-h-full flex flex-col bg-[#08080a] text-[#ededed] font-sans">
         {children}
       </body>
     </html>
