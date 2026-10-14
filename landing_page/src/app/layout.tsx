@@ -19,8 +19,8 @@ const newsreader = Newsreader({
 });
 
 export const metadata: Metadata = {
-  title: "Peaky",
-  description: "Minimalist Dynamic Island & Productivity Notch",
+  title: "Peaky — Minimalist Desktop Dynamic Island",
+  description: "A discreet floating dynamic island that hugs the top bezel of your display.",
 };
 
 export default function RootLayout({
@@ -31,9 +31,9 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} ${newsreader.variable} h-full antialiased dark`}
+      className={`${geistSans.variable} ${geistMono.variable} ${newsreader.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col bg-[#08080a] text-[#ededed] font-sans">
+      <body className="min-h-full flex flex-col bg-[#1f3de8] text-white font-sans selection:bg-white selection:text-[#1f3de8] overflow-x-hidden">
         {children}
       </body>
     </html>
